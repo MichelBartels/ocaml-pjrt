@@ -1,0 +1,27 @@
+(library
+ (name iree_bindings)
+ (libraries ctypes)
+ (ctypes
+  (external_library_name libIREECompiler)
+  (build_flags_resolver
+   (vendored
+    (c_flags :standard -I /home/michel/part-ii-project/iree_bindings/c/)
+    (c_library_flags
+     :standard
+     -L
+     /home/michel/part-ii-project/iree_bindings/libs/
+     -l
+     IREECompiler)))
+  (headers
+   (include
+    "iree/compiler/tool_entry_points_api.h"
+    "iree/compiler/embedding_api.h"))
+  (type_description
+   (instance Type)
+   (functor Type_description))
+  (function_description
+   (concurrency sequential)
+   (instance Functions)
+   (functor Function_description))
+  (generated_types Types_generated)
+  (generated_entry_point C)))

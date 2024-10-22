@@ -1,0 +1,4 @@
+(executable
+ (public_name iree_bindings)
+ (name main)
+ (libraries iree_bindings))
