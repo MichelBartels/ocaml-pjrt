@@ -1,6 +1,6 @@
-type tensor_element_type = F32
+type tensor_element_type = F32 | I1
 
-let tensor_element_type_to_string = function F32 -> "f32"
+let tensor_element_type_to_string = function F32 -> "f32" | I1 -> "i1"
 
 type shape = int list
 
@@ -18,7 +18,10 @@ let value_type_to_string = function
 type annotated_value = string * value_type
 
 type op =
-  {inputs: annotated_value list; outputs: annotated_value list; name: string}
+  { inputs: annotated_value list
+  ; outputs: annotated_value list
+  ; name: string
+  ; attributes: (string * string) list }
 
 let op_to_string op =
   let outputs =
@@ -27,6 +30,14 @@ let op_to_string op =
   in
   let inputs =
     String.concat ", " (List.map (fun (input, _) -> "%" ^ input) op.inputs)
+  in
+  let attributes =
+    if List.is_empty op.attributes then ""
+    else
+      " {\n"
+      ^ String.concat ",\n"
+          (List.map (fun (attr, value) -> attr ^ " = " ^ value) op.attributes)
+      ^ "\n}"
   in
   let input_types =
     String.concat ", "
@@ -39,7 +50,8 @@ let op_to_string op =
         (List.map (fun (_, t) -> value_type_to_string t) op.outputs)
   in
   let signature = "(" ^ input_types ^ ") -> " ^ output_types ^ "" in
-  outputs ^ "\"" ^ op.name ^ "\"(" ^ inputs ^ ") : " ^ signature
+  outputs ^ "\"" ^ op.name ^ "\"(" ^ inputs ^ ")" ^ attributes ^ " : "
+  ^ signature
 
 type func =
   { id: string
@@ -55,7 +67,7 @@ let func_to_string func =
          func.inputs )
   in
   let outputs =
-    String.concat ", " (List.map value_type_to_string func.outputs)
+    "(" ^ String.concat ", " (List.map value_type_to_string func.outputs) ^ ")"
   in
   let body = String.concat "\n" (List.map op_to_string func.body) in
   "func.func @" ^ func.id ^ "(" ^ inputs ^ ") -> " ^ outputs ^ " {\n" ^ body
