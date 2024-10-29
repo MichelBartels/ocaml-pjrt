@@ -5,13 +5,8 @@
   (external_library_name libIREECompiler)
   (build_flags_resolver
    (vendored
-    (c_flags :standard -I /home/michel/part-ii-project/iree_bindings/c/)
-    (c_library_flags
-     :standard
-     -L
-     /home/michel/part-ii-project/iree_bindings/libs/
-     -l
-     IREECompiler)))
+    (c_flags :standard -I ../../../c)
+    (c_library_flags :standard -L ../../libs/ -l IREECompiler)))
   (headers
    (include
     "iree/compiler/tool_entry_points_api.h"
