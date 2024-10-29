@@ -7,13 +7,25 @@ module type S = sig
     | [] : ('a * 'a) t
     | ( :: ) : 'a u * ('b * 'c) t -> ('b * ('a v -> 'c)) t
 
+  type map_fn = {f: 'a. 'a u -> 'a u}
+
+  val map : map_fn -> 'a t -> 'a t
+
+  type 'a map2_fn = {f: 'b. 'b u -> 'a -> 'b u}
+
+  val map2 : 'a map2_fn -> 'b t -> 'a list -> 'b t
+
   type 'a fold_fn = {f: 'b. 'a -> 'b u -> 'a}
 
   val fold_left : 'a fold_fn -> 'a -> 'b t -> 'a
 
-  type 'a map_fn = {f: 'b. 'b u -> 'a}
+  type 'a map_to_list_fn = {f: 'b. 'b u -> 'a}
 
-  val map : 'a map_fn -> 'b t -> 'a list
+  val map_to_list : 'a map_to_list_fn -> 'b t -> 'a list
+
+  type ('a, 'b) map2_to_list_fn = {f: 'c. 'c u -> 'a -> 'b}
+
+  val map2_to_list : ('a, 'b) map2_to_list_fn -> 'c t -> 'a list -> 'b list
 
   type any = Any : 'a u -> any
 
@@ -33,15 +45,40 @@ end) : S with type 'a u = 'a T.t and type 'a v = 'a T.tag = struct
     | [] : ('a * 'a) t
     | ( :: ) : 'a T.t * ('b * 'c) t -> ('b * ('a v -> 'c)) t
 
+  type map_fn = {f: 'a. 'a T.t -> 'a u}
+
+  let rec map : type a. map_fn -> a t -> a t =
+   fun f l -> match l with [] -> [] | x :: xs -> f.f x :: map f xs
+
+  type 'a map2_fn = {f: 'b. 'b T.t -> 'a -> 'b T.t}
+
+  let rec map2 : type a b. a map2_fn -> b t -> a list -> b t =
+   fun f l1 l2 ->
+    match (l1, l2) with
+    | [], List.[] ->
+        []
+    | x :: xs, List.(y :: ys) ->
+        f.f x y :: map2 f xs ys
+    | _ ->
+        failwith "map2: lists have different lengths"
+
   type 'a fold_fn = {f: 'b. 'a -> 'b T.t -> 'a}
 
   let rec fold_left : type a b. b fold_fn -> b -> a t -> b =
    fun f acc l ->
     match l with [] -> acc | x :: xs -> fold_left f (f.f acc x) xs
 
-  type 'a map_fn = {f: 'b. 'b T.t -> 'a}
+  type 'a map_to_list_fn = {f: 'b. 'b T.t -> 'a}
 
-  let map f l = fold_left {f= (fun acc x -> List.cons (f.f x) acc)} [] l
+  let map_to_list f l = fold_left {f= (fun acc x -> List.cons (f.f x) acc)} [] l
+
+  type ('a, 'b) map2_to_list_fn = {f: 'c. 'c u -> 'a -> 'b}
+
+  let map2_to_list f l1 l2 =
+    fold_left
+      {f= (fun (acc, xs) y -> (List.cons (f.f y (List.hd xs)) acc, List.tl xs))}
+      ([], l2) l1
+    |> fst
 
   type any = Any : 'a T.t -> any
 

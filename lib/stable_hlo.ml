@@ -1,6 +1,12 @@
-type tensor_element_type = F32 | I1
+type tensor_element_type = F32 | I1 | I64
 
-let tensor_element_type_to_string = function F32 -> "f32" | I1 -> "i1"
+let tensor_element_type_to_string = function
+  | F32 ->
+      "f32"
+  | I1 ->
+      "i1"
+  | I64 ->
+      "i64"
 
 type shape = int list
 
@@ -21,7 +27,8 @@ type op =
   { inputs: annotated_value list
   ; outputs: annotated_value list
   ; name: string
-  ; attributes: (string * string) list }
+  ; attributes: (string * string) list
+  ; call: bool }
 
 let op_to_string op =
   let outputs =
@@ -44,14 +51,14 @@ let op_to_string op =
       (List.map (fun (_, t) -> value_type_to_string t) op.inputs)
   in
   let output_types =
-    if List.is_empty op.outputs then "()"
-    else
-      String.concat ", "
+    "("
+    ^ String.concat ", "
         (List.map (fun (_, t) -> value_type_to_string t) op.outputs)
+    ^ ")"
   in
   let signature = "(" ^ input_types ^ ") -> " ^ output_types ^ "" in
-  outputs ^ "\"" ^ op.name ^ "\"(" ^ inputs ^ ")" ^ attributes ^ " : "
-  ^ signature
+  let call = if op.call then "call @" ^ op.name else "\"" ^ op.name ^ "\"" in
+  outputs ^ call ^ "(" ^ inputs ^ ")" ^ attributes ^ " : " ^ signature
 
 type func =
   { id: string

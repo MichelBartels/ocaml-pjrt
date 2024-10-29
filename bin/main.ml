@@ -1,15 +1,19 @@
 open Iree_bindings
 
 let main =
-  Ir.(
-    create_func
-      [Tensor_type ([1], F32); Tensor_type ([1], F32)]
-      (fun a b ->
-        let* result1 = Compare (a, Le, b) in
-        let* result2 = Absf a in
-        VarList.[result1; result2] ) )
+  Dsl.(
+    let add =
+      fn
+        [Tensor_type ([], F32); Tensor_type ([], F32)]
+        (fun x y -> [x + y; x + x])
+    in
+    fn
+      [Tensor_type ([], F32)]
+      (fun x ->
+        let [x; y] = Ir.call_func add [x; x] in
+        [x + y] ) )
 
-let main_code = Ir.func_to_stable_hlo main |> Stable_hlo.func_to_string
+let main_code = Ir.compile main
 
 let () =
   print_endline main_code ;
