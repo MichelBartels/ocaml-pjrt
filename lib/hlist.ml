@@ -7,6 +7,8 @@ module type S = sig
     | [] : ('a * 'a) t
     | ( :: ) : 'a u * ('b * 'c) t -> ('b * ('a v -> 'c)) t
 
+  val append : ('b * 'c) t -> ('a * 'b) t -> ('a * 'c) t
+
   type map_fn = {f: 'a. 'a u -> 'a u}
 
   val map : map_fn -> 'a t -> 'a t
@@ -44,6 +46,9 @@ end) : S with type 'a u = 'a T.t and type 'a v = 'a T.tag = struct
   type _ t =
     | [] : ('a * 'a) t
     | ( :: ) : 'a T.t * ('b * 'c) t -> ('b * ('a v -> 'c)) t
+
+  let rec append : type a b c. (b * c) t -> (a * b) t -> (a * c) t =
+   fun l1 l2 -> match l1 with [] -> l2 | x :: xs -> x :: append xs l2
 
   type map_fn = {f: 'a. 'a T.t -> 'a u}
 
@@ -87,4 +92,11 @@ end) : S with type 'a u = 'a T.t and type 'a v = 'a T.tag = struct
         Any x :: to_any_list xs
     | [] ->
         []
+end
+
+module Map (L1 : S) (L2 : S with type 'a v = 'a L1.v) = struct
+  type map_fn = {f: 'a. 'a L1.u -> 'a L2.u}
+
+  let rec map : type a. map_fn -> a L1.t -> a L2.t =
+   fun f l -> match l with [] -> [] | x :: xs -> f.f x :: map f xs
 end

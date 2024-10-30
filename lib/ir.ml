@@ -75,7 +75,7 @@ module rec Var : sig
     | Compare : 'a t * comparison_direction * 'a t -> i1 expr
     | Constant : 'a value_type * string -> 'a expr
     | Random : 'a value_type * f32 t * f32 t * i64 t * distribution -> 'a expr
-    | Output : 'a value_type * ('b, 'c) Call.t -> 'a expr
+    | Output : 'a value_type * ('b, 'c, 'd) Call.t -> 'a expr
 end = struct
   type 'a t = 'a expr tagged
 
@@ -88,19 +88,19 @@ end = struct
     | Compare : 'a t * comparison_direction * 'a t -> i1 expr
     | Constant : 'a value_type * string -> 'a expr
     | Random : 'a value_type * f32 t * f32 t * i64 t * distribution -> 'a expr
-    | Output : 'a value_type * ('b, 'c) Call.t -> 'a expr
+    | Output : 'a value_type * ('b, 'c, 'd) Call.t -> 'a expr
 end
 
 and Call : sig
-  type ('a, 'b) t =
-    { func: ('a, 'b) Func.t
-    ; args: ((unit * 'b) VarList.t * 'a) VarList.t
+  type ('a, 'b, 'c) t =
+    { func: ('a, 'b, 'c) Func.t
+    ; args: ('c * 'a) VarList.t
     ; output_ids: int list
     ; id: id }
 end = struct
-  type ('a, 'b) t =
-    { func: ('a, 'b) Func.t
-    ; args: ((unit * 'b) VarList.t * 'a) VarList.t
+  type ('a, 'b, 'c) t =
+    { func: ('a, 'b, 'c) Func.t
+    ; args: ('c * 'a) VarList.t
     ; output_ids: int list
     ; id: id }
 end
@@ -122,14 +122,14 @@ Hlist.Make (struct
 end)
 
 and Func : sig
-  type ('a, 'b) t =
-    { inputs: ((unit * 'b) VarList.t * 'a) ValueTypeList.t
+  type ('a, 'b, 'c) t =
+    { inputs: ('c * 'a) ValueTypeList.t
     ; parameter_names: string list
     ; outputs: (unit * 'b) VarList.t
     ; name: string }
 end = struct
-  type ('a, 'b) t =
-    { inputs: ((unit * 'b) VarList.t * 'a) ValueTypeList.t
+  type ('a, 'b, 'c) t =
+    { inputs: ('c * 'a) ValueTypeList.t
     ; parameter_names: string list
     ; outputs: (unit * 'b) VarList.t
     ; name: string }
@@ -155,6 +155,9 @@ let rec value_type_of_var : type a. a Var.t -> a value_type = function
       value_type
   | _, Output (value_type, _) ->
       value_type
+
+let shape_of_var var =
+  value_type_of_var var |> function Tensor_type (shape, _) -> shape
 
 let var_to_annotated_value var =
   (string_of_int @@ fst var, value_type_to_stable_hlo @@ value_type_of_var var)
@@ -317,12 +320,15 @@ let rec apply :
       (output, string_of_int id :: parameters)
 
 let create_func :
-    type a b. ((unit * b) VarList.t * a) ValueTypeList.t -> a -> (a, b) Func.t =
+    type a b.
+       ((unit * b) VarList.t * a) ValueTypeList.t
+    -> a
+    -> (a, b, (unit * b) VarList.t) Func.t =
  fun inputs body ->
   let outputs, parameter_names = apply inputs body in
   {inputs; parameter_names; outputs; name= "fn" ^ string_of_int (new_id ())}
 
-let func_to_stable_hlo (func : ('a, 'b) Func.t) =
+let func_to_stable_hlo (func : ('a, 'b, 'c) Func.t) =
   let ops = vars_to_ops func.outputs in
   let inputs =
     ValueTypeList.map_to_list {f= value_type_to_stable_hlo} func.inputs
@@ -334,10 +340,7 @@ let func_to_stable_hlo (func : ('a, 'b) Func.t) =
   Stable_hlo.{id= func.name; inputs; outputs; body= ops @ [return_ops]}
 
 let call_func :
-    type a b.
-       (a, b) Func.t
-    -> ((unit * b) VarList.t * a) VarList.t
-    -> (unit * b) VarList.t =
+    type a b c. (a, b, c) Func.t -> (c * a) VarList.t -> (unit * b) VarList.t =
  fun func args ->
   let output_ids = VarList.map_to_list {f= (fun _ -> new_id ())} func.outputs in
   let call = Call.{func; args; output_ids; id= new_id ()} in

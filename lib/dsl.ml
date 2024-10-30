@@ -30,6 +30,29 @@ let full_f32 value = full (F32 value)
 
 let full_i1 value = full (I1 value)
 
+let full_like value var =
+  Ir.tag (Ir.shape_of_var var |> Tensor.full value |> Tensor.to_ir)
+
+let ones_like : type a. a Ir.Var.t -> a Ir.Var.t =
+ fun var ->
+  match Ir.value_type_of_var var with
+  | Tensor_type (shape, F32) ->
+      full (F32 1.) shape
+  | Tensor_type (shape, I1) ->
+      full (I1 true) shape
+  | Tensor_type (shape, I64) ->
+      full (I64 1) shape
+
+let zeros_like : type a. a Ir.Var.t -> a Ir.Var.t =
+ fun var ->
+  match Ir.value_type_of_var var with
+  | Tensor_type (shape, F32) ->
+      full (F32 0.) shape
+  | Tensor_type (shape, I1) ->
+      full (I1 false) shape
+  | Tensor_type (shape, I64) ->
+      full (I64 0) shape
+
 let norm mean stddev shape =
   Ir.tag
     (Var.Random
