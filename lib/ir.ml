@@ -68,9 +68,10 @@ module rec Var : sig
         * i64 tensor t
         * distribution
         -> 'a tensor t
-    | Output : 'a tensor ValueType.t * id * ('b, 'c) Call.t -> 'a tensor t
     | [] : unit VarList.t t
     | ( :: ) : 'a t * 'b VarList.t t -> ('a t -> 'b) VarList.t t
+    | DiffVar : id * 'a tensor t -> 'a tensor t
+    | DiffConst : 'a tensor t -> 'a tensor t
 
   val to_var_list : 'a VarList.t t -> 'a VarList.t
 
@@ -97,9 +98,10 @@ end = struct
         * i64 tensor t
         * distribution
         -> 'a tensor t
-    | Output : 'a tensor ValueType.t * id * ('b, 'c) Call.t -> 'a tensor t
     | [] : unit VarList.t t
     | ( :: ) : 'a t * 'b VarList.t t -> ('a t -> 'b) VarList.t t
+    | DiffVar : id * 'a tensor t -> 'a tensor t
+    | DiffConst : 'a tensor t -> 'a tensor t
 
   let rec to_var_list : type a. a VarList.t t -> a VarList.t = function
     | [] ->
@@ -144,8 +146,6 @@ and ValueType : sig
   val of_var : 'a Var.t -> 'a t
 
   val to_arg : 'a t -> 'a Var.t
-
-  val to_output : ('a, 'b) Call.t -> 'c t -> 'c Var.t
 end = struct
   type _ t =
     | Tensor_type : shape * 'a tensor -> 'a tensor t
@@ -188,8 +188,10 @@ end = struct
         let open Hlist.Map (VarList) (ValueTypeList) in
         let l = map {f= of_var} l in
         List_type l
-    | Output (value_type, _, _) ->
-        value_type
+    | DiffVar (_, v) ->
+        of_var v
+    | DiffConst v ->
+        of_var v
 
   let rec to_arg : type a. a t -> a Var.t = function
     | Tensor_type _ as t ->
@@ -198,29 +200,6 @@ end = struct
         let open Hlist.Map (ValueTypeList) (VarList) in
         let l = map {f= to_arg} l in
         Var.from_var_list l
-
-  let to_output : type a b c. (a, b) Call.t -> c t -> c Var.t =
-   fun call t ->
-    let rec aux : type a. a t -> id list -> a Var.t * id list =
-     fun t names ->
-      match (t, names) with
-      | Tensor_type _, name :: names ->
-          (Var.Output (t, name, call), names)
-      | List_type (x :: xs), _ ->
-          let open Hlist.Map (ValueTypeList) (VarList) in
-          let x, names = aux x names in
-          let xs, names = aux (List_type xs) names in
-          (x :: xs, names)
-      | _ ->
-          failwith "Invalid number of names"
-    in
-    aux t call.output_ids |> fst
-end
-
-and Call : sig
-  type ('a, 'b) t = {func: ('a, 'b) Func.t; args: 'a Var.t; output_ids: int list}
-end = struct
-  type ('a, 'b) t = {func: ('a, 'b) Func.t; args: 'a Var.t; output_ids: int list}
 end
 
 and VarList : (Hlist.S with type 'a u = 'a Var.t and type 'a v = 'a Var.t) =
@@ -265,14 +244,6 @@ type any_var = Any_var : 'a Var.t -> any_var
 
 module VarMap = Map.Make (struct
   type t = any_var
-
-  let compare = Stdlib.compare
-end)
-
-type any_call = Any_call : ('a, 'b) Call.t -> any_call
-
-module CallMap = Map.Make (struct
-  type t = any_call
 
   let compare = Stdlib.compare
 end)
@@ -395,48 +366,10 @@ let vars_to_ops vars =
       | hd :: tl ->
           let hd, cache = aux ([], cache) hd in
           aux (hd @ prev_outputs, cache) tl
-      | Output (_, _, call) ->
-          let inputs, cache = aux ([], cache) call.args in
-          let outputs = Var.to_annotated_values call.func.outputs in
-          let op =
-            Stable_hlo.
-              {inputs; outputs; name= call.func.name; attributes= []; call= true}
-          in
-          let entries =
-            match outputs with
-            | [] ->
-                failwith "Function without outputs not supported"
-            | x :: xs ->
-                (Some op, x) :: List.map (fun x -> (None, x)) xs
-          in
-          let open Hlist.Map (VarList) (ValueTypeList) in
-          let output_value_type = ValueType.of_var call.func.outputs in
-          let outputs' =
-            let rec aux :
-                type a. a ValueType.t -> id list -> any_var list * id list =
-             fun t names ->
-              match (names, t) with
-              | name :: names, ValueType.Tensor_type _ ->
-                  ([Any_var (Var.Output (t, name, call))], names)
-              | [], List_type [] ->
-                  ([], [])
-              | _, List_type (x :: xs) ->
-                  let x, names = aux x names in
-                  let xs, names = aux (List_type xs) names in
-                  (x @ xs, names)
-              | _ ->
-                  failwith "Invalid number of names"
-            in
-            aux output_value_type call.output_ids |> fst
-          in
-          let cache =
-            List.fold_left2
-              (fun cache (Any_var output') (op, output) ->
-                add output' (op, output) cache )
-              cache outputs' entries
-          in
-          let outputs = VarMap.find (Any_var var) cache |> snd in
-          (outputs :: prev_outputs, cache)
+      | DiffVar (_, var) ->
+          aux (prev_outputs, cache) var
+      | DiffConst var ->
+          aux (prev_outputs, cache) var
   in
   let outputs, cache = aux ([], VarMap.empty) vars in
   (outputs, VarMap.bindings cache |> List.map snd |> List.map fst |> List.rev)
@@ -471,8 +404,10 @@ let rec get_args : type a. a Var.t -> string list = function
   | x :: xs ->
       let l = Var.to_var_list (x :: xs) in
       VarList.fold_left {f= (fun args var -> get_args var @ args)} [] l
-  | Output (_, _, call) ->
-      get_args call.args
+  | DiffVar (_, var) ->
+      get_args var
+  | DiffConst var ->
+      get_args var
 
 let create_func :
     type a b. a ValueType.t -> (a Var.t -> b Var.t) -> (a, b) Func.t =
@@ -491,15 +426,6 @@ let func_to_stable_hlo (func : ('a, 'b) Func.t) =
   let return_ops = annotated_values_to_return_op outputs in
   let outputs = List.map snd outputs in
   Stable_hlo.{id= func.name; inputs; outputs; body= ops @ [return_ops]}
-
-let call_func : type a b c. (a, b) Func.t -> a Var.t -> b Var.t =
- fun func args ->
-  let output_ids =
-    Var.to_annotated_values func.outputs |> List.map (fun _ -> new_id ())
-  in
-  let call = Call.{func; args; output_ids} in
-  let output_types = ValueType.of_var func.outputs in
-  ValueType.to_output call output_types
 
 module StringMap = Map.Make (String)
 
@@ -524,19 +450,15 @@ let compile entry =
         cache
     | Random (_, a, b, c, _) ->
         all_funcs (all_funcs (all_funcs cache a) b) c
-    | Output (_, _, call) ->
-        let cache = all_funcs cache call.args in
-        let func = call.func in
-        if StringMap.mem func.name cache then cache
-        else
-          let str = func_to_stable_hlo func |> Stable_hlo.func_to_string in
-          let cache = StringMap.add func.name str cache in
-          all_funcs cache func.outputs
     | [] ->
         cache
     | x :: xs ->
         let l = Var.to_var_list (x :: xs) in
         VarList.fold_left {f= all_funcs} cache l
+    | DiffVar (_, var) ->
+        all_funcs cache var
+    | DiffConst var ->
+        all_funcs cache var
   in
   let main = func_to_stable_hlo entry |> Stable_hlo.func_to_string in
   let cache = StringMap.add entry.Func.name main StringMap.empty in

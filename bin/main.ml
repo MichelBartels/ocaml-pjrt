@@ -1,9 +1,11 @@
 open Iree_bindings
 open Dsl
 
-let f = fn (List_type [Tensor_type ([], F32)]) (fun [x] -> Dsl.((x * x) + x))
+let _ = Backpropagate.diff' Var (fun x -> [x + x])
 
-let f' = Backpropagate.diff (VarCons Nil) f
+let f' = Backpropagate.diff (VarCons Nil) (fun [x] -> [x + x])
+
+let f' = fn (List_type [Tensor_type ([], F32)]) f'
 
 let f' = Ir.compile f'
 

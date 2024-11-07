@@ -80,56 +80,91 @@
 (* (input_type, old_output_type, new_output_type) *)
 type (_, _, _) input_list =
   | Nil : (unit, 'a, 'a Ir.Var.t -> unit) input_list
-  | ConstCons : ('a, 'b, 'c) input_list -> ('d -> 'a, 'b, 'c) input_list
+  | ConstCons :
+      ('a, 'b, 'c) input_list
+      -> ('d Ir.tensor Ir.Var.t -> 'a, 'b, 'c) input_list
   | VarCons :
       ('a, 'b, 'c) input_list
-      -> ('d -> 'a, 'b, 'b Ir.Var.t -> 'c) input_list
+      -> ('d Ir.tensor Ir.Var.t -> 'a, 'b, 'b Ir.Var.t -> 'c) input_list
 
-(* type fn = *)
-(*   { f: *)
-(*       'a 'b 'c. *)
-(*       ('a, 'b, 'c) input_list -> ('a, 'b) Ir.Func.t -> ('a, 'c) Ir.Func.t } *)
+type (_, _, _) input =
+  | Var : ('a Ir.tensor Ir.Var.t, 'b, 'b Ir.Var.t -> unit) input
+  | Const : ('a Ir.tensor Ir.Var.t, 'a, unit) input
+  | [] : (unit Ir.VarList.t Ir.Var.t, 'a, unit Ir.VarList.t Ir.Var.t) input
+  | ( :: ) :
+      ('a, 'b, 'c) input
+      * ('d Ir.VarList.t Ir.Var.t, 'b, 'e Ir.VarList.t Ir.Var.t) input
+      -> ( ('a -> 'd) Ir.VarList.t Ir.Var.t
+         , 'a
+         , 'c -> 'e Ir.VarList.t Ir.Var.t )
+         input
 
-(* let diff : fn = failwith "" *)
+let diff' :
+    type a b c.
+       (a, b, c) input
+    -> (a -> b Ir.Var.t)
+    -> a Ir.VarList.t Ir.Var.t
+    -> (c -> b -> unit) Ir.VarList.t Ir.Var.t =
+ fun _ _ _ -> failwith "todo"
 
 let diff :
     type a b c.
        (a, b, c) input_list
-    -> (a Ir.VarList.t, b) Ir.Func.t
-    -> (a Ir.VarList.t, c Ir.VarList.t) Ir.Func.t =
- fun l fn ->
-  let rec aux : type a. a Ir.Var.t -> string -> a Ir.Var.t =
+    -> (a Ir.VarList.t Ir.Var.t -> b Ir.Var.t)
+    -> a Ir.VarList.t Ir.Var.t
+    -> c Ir.VarList.t Ir.Var.t =
+ fun l f inputs ->
+  let rec backprop : type a. a Ir.Var.t -> int -> a Ir.Var.t =
     Dsl.(
       fun v x ->
         match v with
         | Ir.Var.Add (v1, v2) ->
-            aux v1 x + aux v2 x
+            backprop v1 x + backprop v2 x
         | Subtract (v1, v2) ->
-            aux v1 x - aux v2 x
+            backprop v1 x - backprop v2 x
         | Multiply (v1, v2) ->
-            (v1 * aux v2 x) + (v2 * aux v1 x)
+            (v1 * backprop v2 x) + (v2 * backprop v1 x)
         | Abs v ->
-            abs (aux v x)
-        | Argument (name, _) ->
-            if String.equal name x then ones_like v else zeros_like v
+            abs (backprop v x)
+        | Argument _ ->
+            zeros_like v
         | Compare (a, dir, b) ->
-            compare dir (aux a x) (aux b x)
+            compare dir (backprop a x) (backprop b x)
         | Constant _ ->
             zeros_like v
         | Random _ ->
             zeros_like v
-        | Output _ ->
-            failwith "todo"
         | [] ->
             []
         | y :: ys ->
-            aux y x :: aux ys x )
+            backprop y x :: backprop ys x
+        | DiffVar (id, _) ->
+            if Int.equal id x then Dsl.ones_like v else Dsl.zeros_like v
+        | DiffConst _ ->
+            Dsl.zeros_like v )
+  in
+  let rec wrap_inputs :
+      type a b c.
+         (a, b, c) input_list
+      -> a Ir.VarList.t Ir.Var.t
+      -> a Ir.VarList.t Ir.Var.t * Ir.id list =
+   fun l1 l2 ->
+    match (l1, l2) with
+    | Nil, [] ->
+        ([], [])
+    | ConstCons l, x :: xs ->
+        let inputs, ids = wrap_inputs l xs in
+        (DiffConst x :: inputs, ids)
+    | VarCons l, x :: xs ->
+        let inputs, ids = wrap_inputs l xs in
+        let id = Ir.new_id () in
+        (DiffVar (id, x) :: inputs, id :: ids)
   in
   let rec iter_vars :
       type a b c.
          (a, b, c) input_list
       -> b Ir.Var.t
-      -> string list
+      -> Ir.id list
       -> c Ir.VarList.t Ir.Var.t =
    fun l outputs names ->
     match (l, names) with
@@ -138,9 +173,10 @@ let diff :
     | ConstCons l, _ :: names ->
         iter_vars l outputs names
     | VarCons l, name :: names ->
-        aux outputs name :: iter_vars l outputs names
+        backprop outputs name :: iter_vars l outputs names
     | _ ->
         failwith "should be impossible"
   in
-  let outputs = iter_vars l fn.outputs fn.parameter_names in
-  {fn with outputs}
+  let inputs, ids = wrap_inputs l inputs in
+  let outputs = f inputs in
+  iter_vars l outputs ids
