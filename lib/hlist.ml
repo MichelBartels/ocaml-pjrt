@@ -3,11 +3,9 @@ module type S = sig
 
   type !'a v
 
-  type _ t =
-    | [] : ('a * 'a) t
-    | ( :: ) : 'a u * ('b * 'c) t -> ('b * ('a v -> 'c)) t
+  type _ t = [] : unit t | ( :: ) : 'a u * 'b t -> ('a v -> 'b) t
 
-  val append : ('b * 'c) t -> ('a * 'b) t -> ('a * 'c) t
+  val length : 'a t -> int
 
   type map_fn = {f: 'a. 'a u -> 'a u}
 
@@ -43,12 +41,13 @@ end) : S with type 'a u = 'a T.t and type 'a v = 'a T.tag = struct
 
   type 'a v = 'a T.tag
 
-  type _ t =
-    | [] : ('a * 'a) t
-    | ( :: ) : 'a T.t * ('b * 'c) t -> ('b * ('a v -> 'c)) t
+  type _ t = [] : unit t | ( :: ) : 'a T.t * 'b t -> ('a v -> 'b) t
 
-  let rec append : type a b c. (b * c) t -> (a * b) t -> (a * c) t =
-   fun l1 l2 -> match l1 with [] -> l2 | x :: xs -> x :: append xs l2
+  let rec length : type a. a t -> int = function
+    | [] ->
+        0
+    | _ :: xs ->
+        1 + length xs
 
   type map_fn = {f: 'a. 'a T.t -> 'a u}
 

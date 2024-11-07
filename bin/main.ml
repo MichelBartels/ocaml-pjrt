@@ -1,27 +1,12 @@
 open Iree_bindings
 open Dsl
 
-let add =
-  fn [Tensor_type ([], F32); Tensor_type ([], F32)] (fun x y -> [x + y; x + x])
+let f = fn (List_type [Tensor_type ([], F32)]) (fun [x] -> Dsl.((x * x) + x))
 
-let add' = Backpropagate.(differentiate_func (Const @-> Var @-> return) add)
+let f' = Backpropagate.diff (VarCons Nil) f
 
-let call_add' =
-  fn
-    [Tensor_type ([], F32); Tensor_type ([], F32)]
-    (fun x y ->
-      let [a; b; c] = Ir.call_func add' [x; y] in
-      [a + b + c] )
-
-let main =
-  fn
-    [Tensor_type ([], F32)]
-    (fun x ->
-      let [x; y] = Ir.call_func add [x; x] in
-      [x + y] )
-
-let main_code = Ir.compile main
+let f' = Ir.compile f'
 
 let () =
-  print_endline main_code ;
-  Compile.compile main_code "out.vmfb"
+  print_endline f' ;
+  Compile.compile f' "out.vmfb"
