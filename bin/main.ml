@@ -1,14 +1,16 @@
 open Iree_bindings
 open Dsl
 
-let _ = Backpropagate.diff' Var (fun x -> [x + x])
+let f' = Backpropagate.diff Var (fun x -> [(x * x) + x])
 
-let f' = Backpropagate.diff (VarCons Nil) (fun [x] -> [x + x])
+let g x =
+  let [[[grad]]; [value]] = f' x in
+  grad + value
 
-let f' = fn (List_type [Tensor_type ([], F32)]) f'
+let g = fn (Tensor_type ([], F32)) g
 
-let f' = Ir.compile f'
+let g = Ir.compile g
 
 let () =
-  print_endline f' ;
-  Compile.compile f' "out.vmfb"
+  print_endline g ;
+  Compile.compile g "out.vmfb"

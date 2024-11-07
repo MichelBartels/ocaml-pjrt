@@ -88,31 +88,23 @@ type (_, _, _) input_list =
       -> ('d Ir.tensor Ir.Var.t -> 'a, 'b, 'b Ir.Var.t -> 'c) input_list
 
 type (_, _, _) input =
-  | Var : ('a Ir.tensor Ir.Var.t, 'b, 'b Ir.Var.t -> unit) input
-  | Const : ('a Ir.tensor Ir.Var.t, 'a, unit) input
-  | [] : (unit Ir.VarList.t Ir.Var.t, 'a, unit Ir.VarList.t Ir.Var.t) input
+  | Var : ('a Ir.tensor, 'b, 'b Ir.Var.t -> unit) input
+  | Const : ('a Ir.tensor, 'a, unit) input
+  | [] : (unit Ir.VarList.t, 'a, unit Ir.VarList.t Ir.Var.t -> unit) input
   | ( :: ) :
       ('a, 'b, 'c) input
-      * ('d Ir.VarList.t Ir.Var.t, 'b, 'e Ir.VarList.t Ir.Var.t) input
-      -> ( ('a -> 'd) Ir.VarList.t Ir.Var.t
-         , 'a
-         , 'c -> 'e Ir.VarList.t Ir.Var.t )
+      * ('d Ir.VarList.t, 'b, 'e Ir.VarList.t Ir.Var.t -> unit) input
+      -> ( ('a Ir.Var.t -> 'd) Ir.VarList.t
+         , 'b
+         , ('c Ir.VarList.t Ir.Var.t -> 'e) Ir.VarList.t Ir.Var.t -> unit )
          input
-
-let diff' :
-    type a b c.
-       (a, b, c) input
-    -> (a -> b Ir.Var.t)
-    -> a Ir.VarList.t Ir.Var.t
-    -> (c -> b -> unit) Ir.VarList.t Ir.Var.t =
- fun _ _ _ -> failwith "todo"
 
 let diff :
     type a b c.
-       (a, b, c) input_list
-    -> (a Ir.VarList.t Ir.Var.t -> b Ir.Var.t)
-    -> a Ir.VarList.t Ir.Var.t
-    -> c Ir.VarList.t Ir.Var.t =
+       (a, b, c) input
+    -> (a Ir.Var.t -> b Ir.Var.t)
+    -> a Ir.Var.t
+    -> (c Ir.VarList.t Ir.Var.t -> b Ir.Var.t -> unit) Ir.VarList.t Ir.Var.t =
  fun l f inputs ->
   let rec backprop : type a. a Ir.Var.t -> int -> a Ir.Var.t =
     Dsl.(
@@ -144,39 +136,43 @@ let diff :
             Dsl.zeros_like v )
   in
   let rec wrap_inputs :
-      type a b c.
-         (a, b, c) input_list
-      -> a Ir.VarList.t Ir.Var.t
-      -> a Ir.VarList.t Ir.Var.t * Ir.id list =
+      type a b c. (a, b, c) input -> a Ir.Var.t -> a Ir.Var.t * Ir.id list =
    fun l1 l2 ->
     match (l1, l2) with
-    | Nil, [] ->
+    | [], [] ->
         ([], [])
-    | ConstCons l, x :: xs ->
-        let inputs, ids = wrap_inputs l xs in
-        (DiffConst x :: inputs, ids)
-    | VarCons l, x :: xs ->
-        let inputs, ids = wrap_inputs l xs in
+    | x :: xs, y :: ys ->
+        let input, ids1 = wrap_inputs x y in
+        let inputs, ids2 = wrap_inputs xs ys in
+        (input :: inputs, ids1 @ ids2)
+    | Var, x ->
         let id = Ir.new_id () in
-        (DiffVar (id, x) :: inputs, id :: ids)
+        (DiffVar (id, x), [id])
+    | Const, x ->
+        (DiffConst x, [])
   in
   let rec iter_vars :
       type a b c.
-         (a, b, c) input_list
+         (a, b, c) input
       -> b Ir.Var.t
       -> Ir.id list
-      -> c Ir.VarList.t Ir.Var.t =
-   fun l outputs names ->
-    match (l, names) with
-    | Nil, [] ->
-        [outputs]
-    | ConstCons l, _ :: names ->
-        iter_vars l outputs names
-    | VarCons l, name :: names ->
-        backprop outputs name :: iter_vars l outputs names
+      -> c Ir.VarList.t Ir.Var.t * Ir.id list =
+   fun l outputs ids ->
+    match (l, ids) with
+    | [], [] ->
+        ([[]], [])
+    | x :: xs, ids ->
+        let output, ids = iter_vars x outputs ids in
+        let [outputs], ids = iter_vars xs outputs ids in
+        ([output :: outputs], ids)
+    | Var, id :: ids ->
+        let output = backprop outputs id in
+        ([output], ids)
+    | Const, ids ->
+        ([], ids)
     | _ ->
         failwith "should be impossible"
   in
   let inputs, ids = wrap_inputs l inputs in
   let outputs = f inputs in
-  iter_vars l outputs ids
+  [fst @@ iter_vars l outputs ids; outputs]
