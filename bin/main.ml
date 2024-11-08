@@ -1,13 +1,13 @@
 open Iree_bindings
 open Dsl
 
-let f' = Backpropagate.diff Var (fun x -> [(x * x) + x])
+let f' = Backpropagate.diff [Var; Var] (fun [x; y] -> [(x * x) + y])
 
 let g x =
-  let [[[grad]]; [value]] = f' x in
-  grad + value
+  let [[[grad1]; [grad2]]; [value]] = f' x in
+  grad1 + grad2 + value
 
-let g = fn (Tensor_type ([], F32)) g
+let g = fn (List_type [Tensor_type ([], F32); Tensor_type ([], F32)]) g
 
 let g = Ir.compile g
 

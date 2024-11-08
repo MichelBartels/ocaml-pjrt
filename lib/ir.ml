@@ -58,7 +58,7 @@ module rec Var : sig
     | Subtract : 'a tensor t * 'a tensor t -> 'a tensor t
     | Multiply : 'a tensor t * 'a tensor t -> 'a tensor t
     | Abs : 'a tensor t -> 'a tensor t
-    | Argument : string * 'a tensor ValueType.t -> 'a tensor t
+    | Argument : id * 'a tensor ValueType.t -> 'a tensor t
     | Compare : 'a tensor t * comparison_direction * 'a tensor t -> i1 tensor t
     | Constant : 'a tensor ValueType.t * string -> 'a tensor t
     | Random :
@@ -88,7 +88,7 @@ end = struct
     | Subtract : 'a tensor t * 'a tensor t -> 'a tensor t
     | Multiply : 'a tensor t * 'a tensor t -> 'a tensor t
     | Abs : 'a tensor t -> 'a tensor t
-    | Argument : string * 'a tensor ValueType.t -> 'a tensor t
+    | Argument : id * 'a tensor ValueType.t -> 'a tensor t
     | Compare : 'a tensor t * comparison_direction * 'a tensor t -> i1 tensor t
     | Constant : 'a tensor ValueType.t * string -> 'a tensor t
     | Random :
@@ -121,7 +121,7 @@ end = struct
   let to_annotated_value var =
     match var with
     | Argument (id, value_type) ->
-        (id, ValueType.tensor_to_stable_hlo value_type)
+        (string_of_int id, ValueType.tensor_to_stable_hlo value_type)
     | _ ->
         tag @@ ValueType.tensor_to_stable_hlo @@ ValueType.of_var var
 
@@ -195,7 +195,7 @@ end = struct
 
   let rec to_arg : type a. a t -> a Var.t = function
     | Tensor_type _ as t ->
-        Var.Argument (string_of_int @@ new_id (), t)
+        Var.Argument (new_id (), t)
     | List_type l ->
         let open Hlist.Map (ValueTypeList) (VarList) in
         let l = map {f= to_arg} l in
@@ -382,7 +382,7 @@ let annotated_values_to_return_op values =
     ; attributes= []
     ; call= false }
 
-let rec get_args : type a. a Var.t -> string list = function
+let rec get_args : type a. a Var.t -> id list = function
   | Add (a, b) ->
       get_args a @ get_args b
   | Subtract (a, b) ->
@@ -416,6 +416,8 @@ let create_func :
   let args = ValueType.to_arg inputs in
   let outputs = body args in
   let parameter_names = get_args args in
+  let parameter_names = List.sort Stdlib.compare parameter_names |> List.rev in
+  let parameter_names = List.map string_of_int parameter_names in
   {inputs; parameter_names; outputs; name= "fn" ^ string_of_int (new_id ())}
 
 let func_to_stable_hlo (func : ('a, 'b) Func.t) =
