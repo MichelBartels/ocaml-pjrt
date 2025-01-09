@@ -1,0 +1,4 @@
+(executable
+ (public_name pjrt_bindings)
+ (name main)
+ (libraries pjrt_bindings))

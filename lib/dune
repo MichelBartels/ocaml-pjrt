@@ -1,0 +1,15 @@
+(library
+ (name pjrt_bindings)
+ (libraries ctypes ctypes-foreign)
+ (ctypes
+  (external_library_name "pjrt")
+  (build_flags_resolver
+   (vendored
+    (c_flags :standard -I ../../../include)))
+  (headers
+   (include "pjrt_c_api.h"))
+  (type_description
+   (instance Type)
+   (functor Type_description))
+  (generated_types Types_generated)
+  (generated_entry_point C)))
