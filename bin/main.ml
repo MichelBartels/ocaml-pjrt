@@ -1,29 +1,40 @@
 open Pjrt_bindings
 
-let example_code =
-  {|
-func.func @main(%arg0: tensor<4xf32>, %arg1:
-tensor<4xf32>) -> tensor<4xf32> {
-  %0 = stablehlo.multiply %arg0, %arg1 : tensor<4xf32>
-  return %0 : tensor<4xf32>
-}
-|}
+module Device =
+  ( val Device.make
+          "/home/michel/part-ii-project/xla/bazel-bin/xla/pjrt/c/pjrt_c_api_gpu_plugin.so"
+    )
 
-let client =
-  Client.make
-    "/home/michel/part-ii-project/xla/bazel-bin/xla/pjrt/c/pjrt_c_api_gpu_plugin.so"
+open Device
 
-let executable = Client.compile client example_code
+(* let example_code = *)
+(* {| *)
+   (* func.func @main(%arg0: tensor<4xf32>, %arg1: *)
+   (* tensor<4xf32>) -> tensor<4xf32> { *)
+   (*   %0 = stablehlo.multiply %arg0, %arg1 : tensor<4xf32> *)
+   (*   return %0 : tensor<4xf32> *)
+   (* } *)
+   (*       |} *)
 
-let device = Client.devices client |> List.hd
+(* let program = compile_and_store ~program:example_code ~path:"cached.bin" *)
 
-let x = Client.buffer_to_device client device [1.0; 2.0; 3.0; 4.0] [4]
+let program = load ~path:"cached.bin"
 
-let y = Client.buffer_to_device client device [1.1; 1.2; 1.3; 1.4] [4]
+let x = Device_api.Tensor.of_list F32 [4] [1.0; 2.0; 3.0; 4.0]
 
-let output = Client.execute client 1 executable [x; y] |> List.hd
+let x = tensor_to_buffer x
 
-let output = Client.buffer_to_host client 4 output
+let y = Device_api.Tensor.of_list F32 [4] [1.1; 1.2; 1.3; 1.4]
+
+let y = tensor_to_buffer y
+
+let outputs = execute program ~num_outputs:1 [x; y]
+
+let output = List.hd outputs
+
+let output = buffer_to_tensor F32 ~shape:[4] output
+
+let output = Device_api.Tensor.to_list output
 
 let () =
   Printf.printf "Output: %s\n"

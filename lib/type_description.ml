@@ -29,6 +29,10 @@ module Types (F : TYPE) = struct
 
   type buffer_memory_layout
 
+  type executable
+
+  type serialized_executable
+
   let client : client structure typ = structure "PJRT_Client"
 
   let error : error structure typ = structure "PJRT_Error"
@@ -113,6 +117,33 @@ module Types (F : TYPE) = struct
     let to_output _ = ()
   end
 
+  module Destroy (F : sig
+    val name : string
+
+    val field_name : string
+
+    type t
+
+    val t : t structure typ
+  end) =
+  struct
+    type t' = F.t
+
+    type t
+
+    let t : t structure typ = structure (F.name ^ "_Destroy_Args")
+
+    let struct_size = field t "struct_size" size_t
+
+    let element = field t F.field_name (ptr F.t)
+
+    let () = seal t
+
+    let api_field =
+      field api (F.name ^ "_Destroy")
+      @@ static_funptr (ptr t @-> returning (ptr_opt error))
+  end
+
   module ClientCreate = struct
     type input = unit
 
@@ -134,6 +165,16 @@ module Types (F : TYPE) = struct
 
     let of_input () _ = ()
   end
+
+  module ClientDestroy = Destroy (struct
+    let name = "PJRT_Client"
+
+    let field_name = "client"
+
+    type t = client
+
+    let t = client
+  end)
 
   module Program = struct
     type t
@@ -232,6 +273,16 @@ module Types (F : TYPE) = struct
       @@ static_funptr (ptr t @-> returning (ptr_opt error))
   end
 
+  module EventDestroy = Destroy (struct
+    let name = "PJRT_Event"
+
+    let field_name = "event"
+
+    type t = event
+
+    let t = event
+  end)
+
   let buffer : buffer structure typ = structure "PJRT_Buffer"
 
   let buffer_type =
@@ -258,7 +309,11 @@ module Types (F : TYPE) = struct
 
   module BufferFromHostBuffer = struct
     type input =
-      client structure ptr * device structure ptr * float list * int list
+      | Input :
+          client structure ptr
+          * device structure ptr
+          * ('a, 'b) Device_api.Tensor.t
+          -> input
 
     type output = buffer structure ptr * event structure ptr
 
@@ -301,6 +356,12 @@ module Types (F : TYPE) = struct
 
     let struct_size = field t "struct_size" size_t
 
+    let non_donatable_input_indices =
+      field t "non_donatable_input_indices" (ptr int64_t)
+
+    let num_non_donatable_input_indices =
+      field t "num_non_donatable_input_indices" size_t
+
     let () = seal t
   end
 
@@ -309,9 +370,9 @@ module Types (F : TYPE) = struct
       loaded_executable structure ptr
       * ExecuteOptions.t structure
       * buffer structure ptr list
-      * int
+      * buffer structure ptr ptr
 
-    type output = buffer structure ptr list * event structure ptr
+    type output = event structure ptr
 
     type t
 
@@ -341,6 +402,16 @@ module Types (F : TYPE) = struct
       @@ static_funptr (ptr t @-> returning (ptr_opt error))
   end
 
+  module LoadedExecutableDestroy = Destroy (struct
+    let name = "PJRT_LoadedExecutable"
+
+    let field_name = "executable"
+
+    type t = loaded_executable
+
+    let t = loaded_executable
+  end)
+
   module BufferToHostBuffer = struct
     type input = buffer structure ptr * int
 
@@ -366,6 +437,112 @@ module Types (F : TYPE) = struct
       field api "PJRT_Buffer_ToHostBuffer"
       @@ static_funptr (ptr t @-> returning (ptr_opt error))
   end
+
+  module BufferDestroy = Destroy (struct
+    let name = "PJRT_Buffer"
+
+    let field_name = "buffer"
+
+    type t = buffer
+
+    let t = buffer
+  end)
+
+  let executable : executable structure typ = structure "PJRT_Executable"
+
+  module LoadedExecutableGetExecutable = struct
+    type input = loaded_executable structure ptr
+
+    type output = executable structure ptr
+
+    type t
+
+    let t : t structure typ =
+      structure "PJRT_LoadedExecutable_GetExecutable_Args"
+
+    let struct_size = field t "struct_size" size_t
+
+    let loaded_executable = field t "loaded_executable" (ptr loaded_executable)
+
+    let executable = field t "executable" (ptr executable)
+
+    let () = seal t
+
+    let api_field =
+      field api "PJRT_LoadedExecutable_GetExecutable"
+      @@ static_funptr (ptr t @-> returning (ptr_opt error))
+  end
+
+  let serialized_executable : serialized_executable structure typ =
+    structure "PJRT_SerializedExecutable"
+
+  module ExecutableSerialize = struct
+    type input = executable structure ptr
+
+    type output = string
+
+    type t
+
+    let t : t structure typ = structure "PJRT_Executable_Serialize_Args"
+
+    let struct_size = field t "struct_size" size_t
+
+    let executable = field t "executable" (ptr executable)
+
+    let serialized_bytes = field t "serialized_bytes" (ptr char)
+
+    let serialized_bytes_size = field t "serialized_bytes_size" size_t
+
+    let serialized_executable_deleter =
+      field t "serialized_executable_deleter"
+        (static_funptr (ptr serialized_executable @-> returning void))
+
+    let serialized_executable' =
+      field t "serialized_executable" (ptr serialized_executable)
+
+    let () = seal t
+
+    let api_field =
+      field api "PJRT_Executable_Serialize"
+      @@ static_funptr (ptr t @-> returning (ptr_opt error))
+  end
+
+  module ExecutableDeserializeAndLoad = struct
+    type input = client structure ptr * string
+
+    type output = loaded_executable structure ptr
+
+    type t
+
+    let t : t structure typ =
+      structure "PJRT_Executable_DeserializeAndLoad_Args"
+
+    let struct_size = field t "struct_size" size_t
+
+    let client = field t "client" (ptr client)
+
+    let serialized_executable = field t "serialized_executable" string
+
+    let serialized_executable_size = field t "serialized_executable_size" size_t
+
+    let loaded_executable = field t "loaded_executable" (ptr loaded_executable)
+
+    let () = seal t
+
+    let api_field =
+      field api "PJRT_Executable_DeserializeAndLoad"
+      @@ static_funptr (ptr t @-> returning (ptr_opt error))
+  end
+
+  module ExecutableDestroy = Destroy (struct
+    let name = "PJRT_Executable"
+
+    let field_name = "executable"
+
+    type t = executable
+
+    let t = executable
+  end)
 
   let () = seal api
 end

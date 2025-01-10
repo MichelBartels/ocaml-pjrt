@@ -1,6 +1,6 @@
 (library
  (name pjrt_bindings)
- (libraries ctypes ctypes-foreign)
+ (libraries ctypes ctypes-foreign device_api)
  (ctypes
   (external_library_name "pjrt")
   (build_flags_resolver

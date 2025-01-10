@@ -109,6 +109,34 @@ end)
 
 module PluginInitialize = FunctionWithError (PluginInitialize)
 
+module Destroy (F : sig
+  type t'
+
+  type t
+
+  val t : t structure typ
+
+  val struct_size : (Unsigned.size_t, t structure) field
+
+  val element : (t' structure ptr, t structure) field
+
+  val api_field :
+    ( (t structure ptr -> error structure ptr option) static_funptr
+    , api structure )
+    field
+end) =
+FunctionWithError (struct
+  include F
+
+  type input = F.t' structure ptr
+
+  type output = unit
+
+  let of_input element' args = setf args element element'
+
+  let to_output _ = ()
+end)
+
 module ClientCreate = FunctionWithError (struct
   include ClientCreate
 
@@ -128,6 +156,8 @@ module Program = struct
     setf program format_size @@ Unsigned.Size_t.of_int @@ String.length format' ;
     program
 end
+
+module ClientDestroy = Destroy (ClientDestroy)
 
 module ClientCompile = FunctionWithError (struct
   include ClientCompile
@@ -166,16 +196,19 @@ module EventAwait = FunctionWithError (struct
   let to_output _ = ()
 end)
 
+module EventDestroy = Destroy (EventDestroy)
+
 module BufferFromHostBuffer = FunctionWithError (struct
   include BufferFromHostBuffer
 
-  let of_input (client', device', data', dims') args =
+  let of_input (Input (client', device', tensor)) args =
     setf args client client' ;
-    let data' = CArray.of_list float data' in
-    let data' = CArray.start data' in
+    let open Device_api in
+    let data' = Tensor.data tensor in
     let data' = to_voidp data' in
     setf args data data' ;
     setf args type' F32 ;
+    let dims' = Tensor.shape tensor in
     let dims' = List.map Signed.Int64.of_int dims' in
     setf args dims @@ CArray.start @@ CArray.of_list int64_t dims' ;
     setf args num_dims @@ Unsigned.Size_t.of_int @@ List.length dims' ;
@@ -188,16 +221,19 @@ end)
 module ExecuteOptions = struct
   include ExecuteOptions
 
-  let make () =
+  let make non_donatable_input_indices' =
     let options = make t in
     setf options struct_size @@ Unsigned.Size_t.of_int @@ sizeof t ;
+    setf options non_donatable_input_indices
+    @@ CArray.start @@ CArray.of_list int64_t
+    @@ List.map Int64.of_int non_donatable_input_indices' ;
     options
 end
 
 module LoadedExecutableExecute = FunctionWithError (struct
   include LoadedExecutableExecute
 
-  let of_input (executable', options', buffers', num_outputs) args =
+  let of_input (executable', options', buffers', output) args =
     setf args executable executable' ;
     setf args options (addr options') ;
     setf args num_devices @@ Unsigned.Size_t.of_int 1 ;
@@ -206,20 +242,15 @@ module LoadedExecutableExecute = FunctionWithError (struct
     let buffers' = CArray.start buffers' in
     let buffers' = CArray.of_list (ptr @@ ptr buffer) [buffers'] in
     setf args argument_lists @@ CArray.start buffers' ;
-    let output = allocate_n (ptr buffer) ~count:num_outputs in
     let output_lists' = CArray.of_list (ptr @@ ptr buffer) [output] in
     setf args output_lists @@ CArray.start output_lists' ;
     let device_complete_events' = allocate_n (ptr event) ~count:1 in
     setf args device_complete_events device_complete_events'
 
-  let to_output args =
-    let output_lists = getf args output_lists in
-    let output_list = !@output_lists in
-    let output_list = CArray.from_ptr output_list 1 in
-    let output_list = CArray.to_list output_list in
-    let device_complete_events = getf args device_complete_events in
-    (output_list, !@device_complete_events)
+  let to_output args = !@(getf args device_complete_events)
 end)
+
+module LoadedExecutableDestroy = Destroy (LoadedExecutableDestroy)
 
 module BufferToHostBuffer = FunctionWithError (struct
   include BufferToHostBuffer
@@ -235,3 +266,53 @@ module BufferToHostBuffer = FunctionWithError (struct
     let event = getf args event in
     (dst, event)
 end)
+
+module BufferDestroy = Destroy (BufferDestroy)
+
+module LoadedExecutableGetExecutable = FunctionWithError (struct
+  include LoadedExecutableGetExecutable
+
+  let of_input loaded_executable' args =
+    setf args loaded_executable loaded_executable'
+
+  let to_output args = getf args executable
+end)
+
+module ExecutableSerialize = FunctionWithError (struct
+  include ExecutableSerialize
+
+  let of_input executable' args = setf args executable executable'
+
+  let to_output args =
+    let serialized_bytes = getf args serialized_bytes in
+    let serialized_bytes_size = getf args serialized_bytes_size in
+    let string =
+      string_from_ptr serialized_bytes
+        ~length:(Unsigned.Size_t.to_int serialized_bytes_size)
+    in
+    let destructor = getf args serialized_executable_deleter in
+    let destructor =
+      coerce
+        (static_funptr (ptr serialized_executable @-> returning void))
+        (Foreign.funptr (ptr serialized_executable @-> returning void))
+        destructor
+    in
+    let serialized_executable = getf args serialized_executable' in
+    destructor serialized_executable ;
+    string
+end)
+
+module ExecutableDeserializeAndLoad = FunctionWithError (struct
+  include ExecutableDeserializeAndLoad
+
+  let of_input (client', serialized_executable') args =
+    setf args client client' ;
+    setf args serialized_executable serialized_executable' ;
+    setf args serialized_executable_size
+    @@ Unsigned.Size_t.of_int
+    @@ String.length serialized_executable'
+
+  let to_output args = getf args loaded_executable
+end)
+
+module ExecutableDestroy = Destroy (ExecutableDestroy)
