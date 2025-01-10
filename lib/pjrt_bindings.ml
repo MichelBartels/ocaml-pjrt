@@ -29,6 +29,8 @@ end) : Device_api.S = struct
 
   let execute program ~num_outputs inputs =
     Client.execute client num_outputs program inputs
+
+  let identifier = "pjrt_" ^ M.path
 end
 
 let make path =
