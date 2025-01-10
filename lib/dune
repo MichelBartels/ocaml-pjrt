@@ -1,5 +1,6 @@
 (library
  (name pjrt_bindings)
+ (public_name pjrt_bindings)
  (libraries ctypes ctypes-foreign device_api)
  (ctypes
   (external_library_name "pjrt")
