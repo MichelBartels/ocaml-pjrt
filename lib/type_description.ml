@@ -17,7 +17,7 @@ module Types (F : TYPE) = struct
 
   type buffer
 
-  type buffer_type = F32
+  type buffer_type = F32 | F64 | I1 | I64 | U32 | U64
 
   type host_buffer_semantics =
     | ImmutableOnlyDuringCall
@@ -287,7 +287,12 @@ module Types (F : TYPE) = struct
 
   let buffer_type =
     enum ~typedef:true "PJRT_Buffer_Type"
-      [(F32, constant "PJRT_Buffer_Type_F32" int64_t)]
+      [ (F32, constant "PJRT_Buffer_Type_F32" int64_t)
+      ; (F64, constant "PJRT_Buffer_Type_F64" int64_t)
+      ; (I1, constant "PJRT_Buffer_Type_PRED" int64_t)
+      ; (I64, constant "PJRT_Buffer_Type_S64" int64_t)
+      ; (U32, constant "PJRT_Buffer_Type_U32" int64_t)
+      ; (U64, constant "PJRT_Buffer_Type_U64" int64_t) ]
 
   let host_buffer_semantics =
     enum ~typedef:true "PJRT_HostBufferSemantics"

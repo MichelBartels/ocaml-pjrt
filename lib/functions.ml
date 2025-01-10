@@ -205,9 +205,23 @@ module BufferFromHostBuffer = FunctionWithError (struct
     setf args client client' ;
     let open Device_api in
     let data' = Tensor.data tensor in
+    let kind = Tensor.kind tensor in
     let data' = to_voidp data' in
     setf args data data' ;
-    setf args type' F32 ;
+    setf args type'
+      ( match kind with
+      | F32 ->
+          F32
+      | F64 ->
+          F64
+      | I1 ->
+          I1
+      | I64 ->
+          I64
+      | U32 ->
+          U32
+      | U64 ->
+          U64 ) ;
     let dims' = Tensor.shape tensor in
     let dims' = List.map Signed.Int64.of_int dims' in
     setf args dims @@ CArray.start @@ CArray.of_list int64_t dims' ;
