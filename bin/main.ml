@@ -1,7 +1,5 @@
-open Pjrt_bindings
-
 module Device =
-  ( val Device.make
+  ( val Pjrt_bindings.make
           "/home/michel/part-ii-project/xla/bazel-bin/xla/pjrt/c/pjrt_c_api_gpu_plugin.so"
     )
 
