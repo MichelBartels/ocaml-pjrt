@@ -66,8 +66,8 @@ let buffer_to_device t device tensor =
 
 let execute t num_outputs executable buffers =
   let internal_buffers = List.map (fun b -> b.buffer) buffers in
-  (* let non_donatable = List.init (List.length buffers) Fun.id in *)
-  let non_donatable = [] in
+  let non_donatable = List.init (List.length buffers) Fun.id in
+  (* let non_donatable = [] in *)
   let options = ExecuteOptions.make non_donatable in
   let output = allocate_n (ptr Types_generated.buffer) ~count:num_outputs in
   let event =
