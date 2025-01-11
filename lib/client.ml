@@ -46,7 +46,8 @@ let read t path =
 
 let devices t = ClientDevices.call t.api t.client
 
-type buffer = {finalised: bool; buffer: Types_generated.buffer structure ptr}
+type buffer =
+  {mutable finalised: bool; buffer: Types_generated.buffer structure ptr}
 
 let buffer_to_device t device tensor =
   let buffer, event =
@@ -61,8 +62,10 @@ let buffer_to_device t device tensor =
   buffer
 
 let execute t num_outputs executable buffers =
+  List.iter (fun b -> b.finalised <- true) buffers ;
   let buffers = List.map (fun b -> b.buffer) buffers in
-  let non_donatable = List.init (List.length buffers) Fun.id in
+  (* let non_donatable = List.init (List.length buffers) Fun.id in *)
+  let non_donatable = [] in
   let options = ExecuteOptions.make non_donatable in
   let output = allocate_n (ptr Types_generated.buffer) ~count:num_outputs in
   let event =
