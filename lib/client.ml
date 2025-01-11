@@ -46,13 +46,9 @@ let read t path =
 
 let devices t = ClientDevices.call t.api t.client
 
-type buffer =
-  {mutable finalised: bool; buffer: Types_generated.buffer structure ptr}
+type buffer = {buffer: Types_generated.buffer structure ptr}
 
-let finalise_buffer t buffer =
-  if not buffer.finalised then (
-    BufferDestroy.call t.api buffer.buffer ;
-    buffer.finalised <- true )
+let finalise_buffer t buffer = BufferDestroy.call t.api buffer.buffer
 
 let buffer_to_device t device tensor =
   let buffer, event =
@@ -60,8 +56,7 @@ let buffer_to_device t device tensor =
   in
   EventAwait.call t.api event ;
   EventDestroy.call t.api event ;
-  let buffer = {finalised= false; buffer} in
-  Gc.finalise (finalise_buffer t) buffer ;
+  let buffer = {buffer} in
   buffer
 
 let execute t num_outputs executable buffers =
@@ -76,13 +71,8 @@ let execute t num_outputs executable buffers =
   in
   EventAwait.call t.api event ;
   EventDestroy.call t.api event ;
-  List.iter (finalise_buffer t) buffers ;
   let buffers = CArray.to_list @@ CArray.from_ptr output num_outputs in
-  let buffers = List.map (fun buffer -> {finalised= false; buffer}) buffers in
-  List.iter
-    (Gc.finalise (fun b ->
-         if not b.finalised then BufferDestroy.call t.api b.buffer ) )
-    buffers ;
+  let buffers = List.map (fun buffer -> {buffer}) buffers in
   buffers
 
 let buffer_to_host t ctype num_elements buffer =
