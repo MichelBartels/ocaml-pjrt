@@ -17,7 +17,11 @@ let make path =
   PluginInitialize.call api () ;
   let client = ClientCreate.call api () in
   let t = {api; client} in
-  Gc.finalise (fun t -> ClientDestroy.call t.api t.client) t ;
+  Gc.finalise
+    (fun t ->
+      print_endline "destroying client" ;
+      ClientDestroy.call t.api t.client )
+    t ;
   t
 
 let compile t code =
