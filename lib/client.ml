@@ -49,6 +49,11 @@ let devices t = ClientDevices.call t.api t.client
 type buffer =
   {mutable finalised: bool; buffer: Types_generated.buffer structure ptr}
 
+let finalise_buffer t buffer =
+  if not buffer.finalised then (
+    BufferDestroy.call t.api buffer.buffer ;
+    buffer.finalised <- true )
+
 let buffer_to_device t device tensor =
   let buffer, event =
     BufferFromHostBuffer.call t.api (Input (t.client, device, tensor))
@@ -56,26 +61,28 @@ let buffer_to_device t device tensor =
   EventAwait.call t.api event ;
   EventDestroy.call t.api event ;
   let buffer = {finalised= false; buffer} in
-  Gc.finalise
-    (fun b -> if not b.finalised then BufferDestroy.call t.api b.buffer)
-    buffer ;
+  Gc.finalise (finalise_buffer t) buffer ;
   buffer
 
 let execute t num_outputs executable buffers =
-  List.iter (fun b -> b.finalised <- true) buffers ;
-  let buffers = List.map (fun b -> b.buffer) buffers in
+  let internal_buffers = List.map (fun b -> b.buffer) buffers in
   (* let non_donatable = List.init (List.length buffers) Fun.id in *)
   let non_donatable = [] in
   let options = ExecuteOptions.make non_donatable in
   let output = allocate_n (ptr Types_generated.buffer) ~count:num_outputs in
   let event =
-    LoadedExecutableExecute.call t.api (executable, options, buffers, output)
+    LoadedExecutableExecute.call t.api
+      (executable, options, internal_buffers, output)
   in
   EventAwait.call t.api event ;
   EventDestroy.call t.api event ;
+  List.iter (finalise_buffer t) buffers ;
   let buffers = CArray.to_list @@ CArray.from_ptr output num_outputs in
-  let buffers = List.map (fun buffer -> {finalised= true; buffer}) buffers in
-  List.iter (Gc.finalise (fun b -> BufferDestroy.call t.api b.buffer)) buffers ;
+  let buffers = List.map (fun buffer -> {finalised= false; buffer}) buffers in
+  List.iter
+    (Gc.finalise (fun b ->
+         if not b.finalised then BufferDestroy.call t.api b.buffer ) )
+    buffers ;
   buffers
 
 let buffer_to_host t ctype num_elements buffer =
