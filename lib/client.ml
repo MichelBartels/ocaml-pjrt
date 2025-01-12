@@ -61,22 +61,41 @@ let buffer_to_device t device tensor =
 
 let execute t num_outputs executable buffers =
   let internal_buffers = List.map (fun b -> b.buffer) buffers in
+  let internal_buffers =
+    CArray.of_list (ptr Types_generated.buffer) internal_buffers
+  in
+  let root_1 = Root.create internal_buffers in
+  let internal_buffers = CArray.start internal_buffers in
+  let internal_buffers =
+    CArray.of_list (ptr @@ ptr Types_generated.buffer) [internal_buffers]
+  in
+  let root_2 = Root.create internal_buffers in
   let non_donatable = List.init (List.length buffers) Fun.id in
   (* let non_donatable = [] in *)
   let options = ExecuteOptions.make non_donatable in
-  let options_root = Root.create options in
+  let root_3 = Root.create options in
   let output = allocate_n (ptr Types_generated.buffer) ~count:num_outputs in
+  let output' = CArray.of_list (ptr @@ ptr buffer) [output] in
+  let root_4 = Root.create output' in
   print_endline "before execute" ;
-  let event =
-    LoadedExecutableExecute.call t.api
-      (executable, options, internal_buffers, output)
-  in
+  let event = allocate_n (ptr Types_generated.event) ~count:1 in
+  LoadedExecutableExecute.call t.api
+    ( executable
+    , options
+    , CArray.start internal_buffers
+    , List.length buffers
+    , CArray.start output'
+    , event ) ;
   print_endline "after execute" ;
+  let event = !@event in
   EventAwait.call t.api event ;
   print_endline "after await" ;
   EventDestroy.call t.api event ;
   print_endline "after destroy" ;
-  Root.release options_root ;
+  Root.release root_1 ;
+  Root.release root_2 ;
+  Root.release root_3 ;
+  Root.release root_4 ;
   let buffers = CArray.to_list @@ CArray.from_ptr output num_outputs in
   let buffers = List.map (fun buffer -> {buffer}) buffers in
   buffers

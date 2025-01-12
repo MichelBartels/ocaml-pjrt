@@ -247,21 +247,17 @@ end
 module LoadedExecutableExecute = FunctionWithError (struct
   include LoadedExecutableExecute
 
-  let of_input (executable', options', buffers', output) args =
+  let of_input (executable', options', buffers', num_buffers, output, event_ptr)
+      args =
     setf args executable executable' ;
     setf args options (addr options') ;
     setf args num_devices @@ Unsigned.Size_t.of_int 1 ;
-    setf args num_args @@ Unsigned.Size_t.of_int @@ List.length buffers' ;
-    let buffers' = CArray.of_list (ptr buffer) buffers' in
-    let buffers' = CArray.start buffers' in
-    let buffers' = CArray.of_list (ptr @@ ptr buffer) [buffers'] in
-    setf args argument_lists @@ CArray.start buffers' ;
-    let output_lists' = CArray.of_list (ptr @@ ptr buffer) [output] in
-    setf args output_lists @@ CArray.start output_lists' ;
-    let device_complete_events' = allocate_n (ptr event) ~count:1 in
-    setf args device_complete_events device_complete_events'
+    setf args num_args @@ Unsigned.Size_t.of_int num_buffers ;
+    setf args argument_lists buffers' ;
+    setf args output_lists output ;
+    setf args device_complete_events event_ptr
 
-  let to_output args = !@(getf args device_complete_events)
+  let to_output _ = ()
 end)
 
 module LoadedExecutableDestroy = Destroy (LoadedExecutableDestroy)

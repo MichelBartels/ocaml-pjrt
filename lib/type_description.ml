@@ -374,10 +374,12 @@ module Types (F : TYPE) = struct
     type input =
       loaded_executable structure ptr
       * ExecuteOptions.t structure
-      * buffer structure ptr list
-      * buffer structure ptr ptr
+      * buffer structure ptr ptr ptr
+      * int
+      * buffer structure ptr ptr ptr
+      * event structure ptr ptr
 
-    type output = event structure ptr
+    type output = unit
 
     type t
 
