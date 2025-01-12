@@ -269,11 +269,10 @@ module LoadedExecutableDestroy = Destroy (LoadedExecutableDestroy)
 module BufferToHostBuffer = FunctionWithError (struct
   include BufferToHostBuffer
 
-  let of_input (buffer, num_elements) args =
+  let of_input (buffer, dst', dst_size') args =
     setf args src buffer ;
-    setf args dst_size @@ Unsigned.Size_t.of_int @@ (num_elements * 4) ;
-    let dst' = allocate_n float ~count:num_elements in
-    setf args dst @@ to_voidp dst'
+    setf args dst_size @@ Unsigned.Size_t.of_int @@ dst_size' ;
+    setf args dst dst'
 
   let to_output args =
     let dst = getf args dst in

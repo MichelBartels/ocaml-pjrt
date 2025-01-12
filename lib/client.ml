@@ -17,11 +17,7 @@ let make path =
   PluginInitialize.call api () ;
   let client = ClientCreate.call api () in
   let t = {api; client} in
-  Gc.finalise
-    (fun t ->
-      print_endline "destroying client" ;
-      ClientDestroy.call t.api t.client )
-    t ;
+  Gc.finalise (fun t -> ClientDestroy.call t.api t.client) t ;
   t
 
 let compile t code =
@@ -80,7 +76,10 @@ let execute t num_outputs executable buffers =
   buffers
 
 let buffer_to_host t ctype num_elements buffer =
-  let data, event = BufferToHostBuffer.call t.api (buffer, num_elements) in
+  let dst = allocate_n ctype ~count:num_elements in
+  let dst = coerce (ptr ctype) (ptr void) dst in
+  let dst_size = num_elements * sizeof ctype in
+  let data, event = BufferToHostBuffer.call t.api (buffer, dst, dst_size) in
   EventAwait.call t.api event ;
   EventDestroy.call t.api event ;
   let data = coerce (ptr void) (ptr ctype) data in
