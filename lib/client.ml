@@ -106,7 +106,6 @@ let execute t num_outputs executable buffers =
   let output = allocate_n (ptr Types_generated.buffer) ~count:num_outputs in
   let output' = CArray.of_list (ptr @@ ptr buffer) [output] in
   let root_4 = Root.create output' in
-  print_endline "before execute" ;
   let event = allocate_n (ptr Types_generated.event) ~count:1 in
   LoadedExecutableExecute.call t.api
     ( executable
@@ -115,12 +114,9 @@ let execute t num_outputs executable buffers =
     , List.length buffers
     , CArray.start output'
     , event ) ;
-  print_endline "after execute" ;
   let event = !@event in
   EventAwait.call t.api event ;
-  print_endline "after await" ;
   EventDestroy.call t.api event ;
-  print_endline "after destroy" ;
   Root.release root_1 ;
   Root.release root_2 ;
   Root.release root_3 ;
