@@ -201,31 +201,12 @@ module EventDestroy = Destroy (EventDestroy)
 module BufferFromHostBuffer = FunctionWithError (struct
   include BufferFromHostBuffer
 
-  let of_input (Input (client', device', tensor)) args =
+  let of_input (client', data', buffer_type, dims', device', num_dims') args =
     setf args client client' ;
-    let open Device_api in
-    let data' = Tensor.data tensor in
-    let kind = Tensor.kind tensor in
-    let data' = to_voidp data' in
     setf args data data' ;
-    setf args type'
-      ( match kind with
-      | F32 ->
-          F32
-      | F64 ->
-          F64
-      | I1 ->
-          I1
-      | I64 ->
-          I64
-      | U32 ->
-          U32
-      | U64 ->
-          U64 ) ;
-    let dims' = Tensor.shape tensor in
-    let dims' = List.map Signed.Int64.of_int dims' in
-    setf args dims @@ CArray.start @@ CArray.of_list int64_t dims' ;
-    setf args num_dims @@ Unsigned.Size_t.of_int @@ List.length dims' ;
+    setf args type' buffer_type ;
+    setf args dims dims' ;
+    setf args num_dims @@ Unsigned.Size_t.of_int num_dims' ;
     setf args host_buffer_semantics ImmutableUntilTransferCompletes ;
     setf args device device'
 

@@ -50,14 +50,43 @@ type buffer = {buffer: Types_generated.buffer structure ptr}
 
 let finalise_buffer t buffer = BufferDestroy.call t.api buffer.buffer
 
-let buffer_to_device t device tensor =
+let buffer_to_device : type a b.
+    t -> device structure ptr -> (a, b) Device_api.Tensor.t -> buffer =
+ fun t device tensor ->
+  let open Device_api in
+  let data = Tensor.data tensor in
+  let kind = Tensor.kind tensor in
+  let data = to_voidp data in
+  let root_1 = Root.create data in
+  let buffer_type =
+    match kind with
+    | F32 ->
+        F32
+    | F64 ->
+        F64
+    | I1 ->
+        I1
+    | I64 ->
+        I64
+    | U32 ->
+        U32
+    | U64 ->
+        U64
+  in
+  let dims = Tensor.shape tensor in
+  let num_dims = List.length dims in
+  let dims = List.map Signed.Int64.of_int dims in
+  let dims = CArray.of_list int64_t dims in
+  let root_2 = Root.create dims in
   let buffer, event =
-    BufferFromHostBuffer.call t.api (Input (t.client, device, tensor))
+    BufferFromHostBuffer.call t.api
+      (t.client, data, buffer_type, CArray.start dims, device, num_dims)
   in
   EventAwait.call t.api event ;
   EventDestroy.call t.api event ;
-  let buffer = {buffer} in
-  buffer
+  Root.release root_1 ;
+  Root.release root_2 ;
+  {buffer}
 
 let execute t num_outputs executable buffers =
   let internal_buffers = List.map (fun b -> b.buffer) buffers in
