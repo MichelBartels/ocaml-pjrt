@@ -275,9 +275,8 @@ module BufferToHostBuffer = FunctionWithError (struct
     setf args dst dst'
 
   let to_output args =
-    let dst = getf args dst in
     let event = getf args event in
-    (dst, event)
+    event
 end)
 
 module BufferDestroy = Destroy (BufferDestroy)

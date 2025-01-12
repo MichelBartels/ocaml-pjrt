@@ -420,7 +420,7 @@ module Types (F : TYPE) = struct
   module BufferToHostBuffer = struct
     type input = buffer structure ptr * unit ptr * int
 
-    type output = unit ptr * event structure ptr
+    type output = event structure ptr
 
     type t
 

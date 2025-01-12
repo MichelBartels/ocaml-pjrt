@@ -79,8 +79,8 @@ let buffer_to_host t ctype num_elements buffer =
   let dst = allocate_n ctype ~count:num_elements in
   let dst = coerce (ptr ctype) (ptr void) dst in
   let dst_size = num_elements * sizeof ctype in
-  let data, event = BufferToHostBuffer.call t.api (buffer, dst, dst_size) in
+  let event = BufferToHostBuffer.call t.api (buffer, dst, dst_size) in
   EventAwait.call t.api event ;
   EventDestroy.call t.api event ;
-  let data = coerce (ptr void) (ptr ctype) data in
+  let data = coerce (ptr void) (ptr ctype) dst in
   CArray.from_ptr data num_elements
