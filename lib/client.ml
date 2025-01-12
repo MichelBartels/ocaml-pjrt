@@ -66,12 +66,16 @@ let execute t num_outputs executable buffers =
   let options = ExecuteOptions.make non_donatable in
   let options_root = Root.create options in
   let output = allocate_n (ptr Types_generated.buffer) ~count:num_outputs in
+  print_endline "before execute" ;
   let event =
     LoadedExecutableExecute.call t.api
       (executable, options, internal_buffers, output)
   in
+  print_endline "after execute" ;
   EventAwait.call t.api event ;
+  print_endline "after await" ;
   EventDestroy.call t.api event ;
+  print_endline "after destroy" ;
   Root.release options_root ;
   let buffers = CArray.to_list @@ CArray.from_ptr output num_outputs in
   let buffers = List.map (fun buffer -> {buffer}) buffers in
