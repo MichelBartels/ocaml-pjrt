@@ -46,38 +46,91 @@ let read t path =
 
 let devices t = ClientDevices.call t.api t.client
 
-type buffer = {finalised: bool; buffer: Types_generated.buffer structure ptr}
+type buffer = {buffer: Types_generated.buffer structure ptr}
 
-let buffer_to_device t device tensor =
+let finalise_buffer t buffer = BufferDestroy.call t.api buffer.buffer
+
+let buffer_to_device : type a b.
+    t -> device structure ptr -> (a, b) Device_api.Tensor.t -> buffer =
+ fun t device tensor ->
+  let open Device_api in
+  let data = Tensor.data tensor in
+  let kind = Tensor.kind tensor in
+  let data = to_voidp data in
+  let root_1 = Root.create data in
+  let buffer_type =
+    match kind with
+    | F32 ->
+        F32
+    | F64 ->
+        F64
+    | I1 ->
+        I1
+    | I64 ->
+        I64
+    | U32 ->
+        U32
+    | U64 ->
+        U64
+  in
+  let dims = Tensor.shape tensor in
+  let num_dims = List.length dims in
+  let dims = List.map Signed.Int64.of_int dims in
+  let dims = CArray.of_list int64_t dims in
+  let root_2 = Root.create dims in
   let buffer, event =
-    BufferFromHostBuffer.call t.api (Input (t.client, device, tensor))
+    BufferFromHostBuffer.call t.api
+      (t.client, data, buffer_type, CArray.start dims, device, num_dims)
   in
   EventAwait.call t.api event ;
   EventDestroy.call t.api event ;
-  let buffer = {finalised= false; buffer} in
-  Gc.finalise
-    (fun b -> if not b.finalised then BufferDestroy.call t.api b.buffer)
-    buffer ;
-  buffer
+  Root.release root_1 ;
+  Root.release root_2 ;
+  {buffer}
 
 let execute t num_outputs executable buffers =
-  let buffers = List.map (fun b -> b.buffer) buffers in
-  let non_donatable = List.init (List.length buffers) Fun.id in
-  let options = ExecuteOptions.make non_donatable in
-  let output = allocate_n (ptr Types_generated.buffer) ~count:num_outputs in
-  let event =
-    LoadedExecutableExecute.call t.api (executable, options, buffers, output)
+  let internal_buffers = List.map (fun b -> b.buffer) buffers in
+  let internal_buffers =
+    CArray.of_list (ptr Types_generated.buffer) internal_buffers
   in
+  let root_1 = Root.create internal_buffers in
+  let internal_buffers = CArray.start internal_buffers in
+  let internal_buffers =
+    CArray.of_list (ptr @@ ptr Types_generated.buffer) [internal_buffers]
+  in
+  let root_2 = Root.create internal_buffers in
+  let non_donatable = List.init (List.length buffers) Fun.id in
+  (* let non_donatable = [] in *)
+  let options = ExecuteOptions.make non_donatable in
+  let root_3 = Root.create options in
+  let output = allocate_n (ptr Types_generated.buffer) ~count:num_outputs in
+  let output' = CArray.of_list (ptr @@ ptr buffer) [output] in
+  let root_4 = Root.create output' in
+  let event = allocate_n (ptr Types_generated.event) ~count:1 in
+  LoadedExecutableExecute.call t.api
+    ( executable
+    , options
+    , CArray.start internal_buffers
+    , List.length buffers
+    , CArray.start output'
+    , event ) ;
+  let event = !@event in
   EventAwait.call t.api event ;
   EventDestroy.call t.api event ;
+  Root.release root_1 ;
+  Root.release root_2 ;
+  Root.release root_3 ;
+  Root.release root_4 ;
   let buffers = CArray.to_list @@ CArray.from_ptr output num_outputs in
-  let buffers = List.map (fun buffer -> {finalised= true; buffer}) buffers in
-  List.iter (Gc.finalise (fun b -> BufferDestroy.call t.api b.buffer)) buffers ;
+  let buffers = List.map (fun buffer -> {buffer}) buffers in
   buffers
 
 let buffer_to_host t ctype num_elements buffer =
-  let data, event = BufferToHostBuffer.call t.api (buffer, num_elements) in
+  let dst = allocate_n ctype ~count:num_elements in
+  let dst = coerce (ptr ctype) (ptr void) dst in
+  let dst_size = num_elements * sizeof ctype in
+  let event = BufferToHostBuffer.call t.api (buffer, dst, dst_size) in
   EventAwait.call t.api event ;
   EventDestroy.call t.api event ;
-  let data = coerce (ptr void) (ptr ctype) data in
+  let data = coerce (ptr void) (ptr ctype) dst in
   CArray.from_ptr data num_elements

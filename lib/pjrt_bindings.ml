@@ -31,6 +31,8 @@ end) : Device_api.S = struct
     Client.execute client num_outputs program inputs
 
   let identifier = "pjrt_" ^ M.path
+
+  let collect_buffer = Client.finalise_buffer client
 end
 
 let make path =

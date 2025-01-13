@@ -314,11 +314,12 @@ module Types (F : TYPE) = struct
 
   module BufferFromHostBuffer = struct
     type input =
-      | Input :
-          client structure ptr
-          * device structure ptr
-          * ('a, 'b) Device_api.Tensor.t
-          -> input
+      client structure ptr
+      * unit ptr
+      * buffer_type
+      * int64 ptr
+      * device structure ptr
+      * int
 
     type output = buffer structure ptr * event structure ptr
 
@@ -374,10 +375,12 @@ module Types (F : TYPE) = struct
     type input =
       loaded_executable structure ptr
       * ExecuteOptions.t structure
-      * buffer structure ptr list
-      * buffer structure ptr ptr
+      * buffer structure ptr ptr ptr
+      * int
+      * buffer structure ptr ptr ptr
+      * event structure ptr ptr
 
-    type output = event structure ptr
+    type output = unit
 
     type t
 
@@ -418,9 +421,9 @@ module Types (F : TYPE) = struct
   end)
 
   module BufferToHostBuffer = struct
-    type input = buffer structure ptr * int
+    type input = buffer structure ptr * unit ptr * int
 
-    type output = unit ptr * event structure ptr
+    type output = event structure ptr
 
     type t
 
