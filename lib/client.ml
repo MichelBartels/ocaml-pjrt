@@ -90,36 +90,22 @@ let buffer_to_device : type a b.
 
 let execute t num_outputs executable buffers =
   let internal_buffers = List.map (fun b -> b.buffer) buffers in
-  print_endline "internal buffers" ;
   let internal_buffers =
     CArray.of_list (ptr Types_generated.buffer) internal_buffers
   in
-  print_endline "internal buffers 2" ;
   let root_1 = Root.create internal_buffers in
-  print_endline "root 1" ;
   let internal_buffers = CArray.start internal_buffers in
-  print_endline "internal buffers 3" ;
   let internal_buffers =
     CArray.of_list (ptr @@ ptr Types_generated.buffer) [internal_buffers]
   in
-  print_endline "internal buffers 4" ;
   let root_2 = Root.create internal_buffers in
-  print_endline "root 2" ;
   let non_donatable = List.init (List.length buffers) Fun.id in
-  print_endline "non donatable" ;
-  (* let non_donatable = [] in *)
   let options = ExecuteOptions.make non_donatable in
-  print_endline "options" ;
   let root_3 = Root.create options in
-  print_endline "root 3" ;
   let output = allocate_n (ptr Types_generated.buffer) ~count:num_outputs in
-  print_endline "output" ;
   let output' = CArray.of_list (ptr @@ ptr buffer) [output] in
-  print_endline "output'" ;
   let root_4 = Root.create output' in
-  print_endline "root 4" ;
   let event = allocate_n (ptr Types_generated.event) ~count:1 in
-  print_endline "event" ;
   LoadedExecutableExecute.call t.api
     ( executable
     , options
@@ -127,25 +113,15 @@ let execute t num_outputs executable buffers =
     , List.length buffers
     , CArray.start output'
     , event ) ;
-  print_endline "execute" ;
   let event = !@event in
-  print_endline "event 2" ;
   EventAwait.call t.api event ;
-  print_endline "event await" ;
   EventDestroy.call t.api event ;
-  print_endline "event destroy" ;
   Root.release root_1 ;
-  print_endline "root 1 release" ;
   Root.release root_2 ;
-  print_endline "root 2 release" ;
   Root.release root_3 ;
-  print_endline "root 3 release" ;
   Root.release root_4 ;
-  print_endline "root 4 release" ;
   let buffers = CArray.to_list @@ CArray.from_ptr output num_outputs in
-  print_endline "buffers" ;
   let buffers = List.map (fun buffer -> {buffer}) buffers in
-  print_endline "buffers 2" ;
   buffers
 
 let buffer_to_host t ctype num_elements buffer =
