@@ -100,7 +100,6 @@ let execute t num_outputs executable buffers =
   in
   let root_2 = Root.create internal_buffers in
   let non_donatable = List.init (List.length buffers) Fun.id in
-  (* let non_donatable = [] in *)
   let options = ExecuteOptions.make non_donatable in
   let root_3 = Root.create options in
   let output = allocate_n (ptr Types_generated.buffer) ~count:num_outputs in

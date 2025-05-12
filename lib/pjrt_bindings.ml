@@ -1,5 +1,6 @@
 module Make (M : sig
   val path : string
+  val caching : bool
 end) : Device_api.S = struct
   let client = Client.make M.path
 
@@ -9,12 +10,19 @@ end) : Device_api.S = struct
 
   type buffer = Client.buffer
 
-  let compile_and_store ~program ~path =
-    let executable = Client.compile client program in
-    Client.write client executable path ;
-    executable
-
-  let load ~path = Client.read client path
+  let compile ?path program =
+    if M.caching then
+      match path with
+      | Some path ->
+          if Sys.file_exists path then
+            Client.read client path
+          else
+            let executable = Client.compile client program in
+            Client.write client executable path;
+            executable
+      | None -> Client.compile client program
+    else
+      Client.compile client program
 
   let tensor_to_buffer tensor = Client.buffer_to_device client device tensor
 
@@ -35,7 +43,8 @@ end) : Device_api.S = struct
   let collect_buffer = Client.finalise_buffer client
 end
 
-let make path =
+let make ?(caching = true) path =
   ( module Make (struct
     let path = path
+    let caching = caching
   end) : Device_api.S )
