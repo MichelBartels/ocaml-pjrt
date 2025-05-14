@@ -2,7 +2,7 @@
 To install this library, run the following command:
 
 ``` shell
-opam pin add ocaml_bayes_dl https://github.com/MichelBartels/device-api.git
+opam pin add ocaml_bayes_dl https://github.com/MichelBartels/ocaml-pjrt.git
 ```
 
 To make any use of this library, you also need a PJRT plugin for your backend. There are multiple options:
