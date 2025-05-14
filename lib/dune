@@ -2,9 +2,9 @@
  (name pjrt_bindings)
  (public_name pjrt_bindings)
  (libraries ctypes ctypes-foreign device_api)
- (concurrency unlocked)
  (ctypes
   (external_library_name "pjrt")
+  (concurrency unlocked)
   (build_flags_resolver
    (vendored
     (c_flags :standard -I ../../../include)))
