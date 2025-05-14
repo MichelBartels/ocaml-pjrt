@@ -36,7 +36,7 @@ struct
     F.of_input input !@args ;
     let f = !@(api |-> F.api_field) in
     let f_type = ptr F.t @-> returning F.status in
-    let f = coerce (static_funptr f_type) (Foreign.funptr f_type) f in
+    let f = coerce (static_funptr f_type) (Foreign.funptr ~runtime_lock:true f_type) f in
     F.check_status api @@ f args ;
     F.to_output !@args
 end
@@ -283,7 +283,7 @@ module ExecutableSerialize = FunctionWithError (struct
     let destructor =
       coerce
         (static_funptr (ptr serialized_executable @-> returning void))
-        (Foreign.funptr (ptr serialized_executable @-> returning void))
+        (Foreign.funptr ~runtime_lock:true (ptr serialized_executable @-> returning void))
         destructor
     in
     let serialized_executable = getf args serialized_executable' in
